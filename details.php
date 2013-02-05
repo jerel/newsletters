@@ -471,6 +471,50 @@ class Module_Newsletters extends Module {
 		   $this->db->insert('newsletter_templates', $template_3) &&
 		   $this->db->insert('newsletter_templates', $template_4) )
 		{
+			$this->load->helper('string');
+
+			$newsletter_cron_enabled = array(
+				'slug' => 'newsletter_cron_enabled',
+				'title' => 'Cron enable',
+				'description' => 'Cron support enabled?',
+				'`default`' => 1,
+				'`value`' => '1',
+				'type' => 'select',
+				'`options`' => '1=Yes|0=No',
+				'is_required' => 0,
+				'is_gui' => 1,
+				'module' => 'newsletters'
+			);
+			$this->db->insert('settings', $newsletter_cron_enabled);
+	
+			$newsletter_email_limit = array(
+				'slug' => 'newsletter_email_limit',
+				'title' => 'Send all limit',
+				'description' => 'Limit of emails sent per batch',
+				'`default`' => '20',
+				'`value`' => '20',
+				'type' => 'select',
+				'`options`' => '0=Unlimited|20=20|50=50|100=100',
+				'is_required' => 1,
+				'is_gui' => 1,
+				'module' => 'newsletters'
+			);
+			$this->db->insert('settings', $newsletter_email_limit);
+	
+			$newsletter_cron_key = array(
+				'slug' => 'newsletter_cron_key',
+				'title' => 'Cron key',
+				'description' => 'Cron key used to automatic emails sending',
+				'`default`' => random_string('alnum', 16),
+				'`value`' => '',
+				'type' => 'text',
+				'`options`' => '',
+				'is_required' => 0,
+				'is_gui' => 1,
+				'module' => 'newsletters'
+			);
+			$this->db->insert('settings', $newsletter_cron_key);
+
 			return TRUE;
 		}
 	}
