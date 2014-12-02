@@ -13,34 +13,34 @@
 class Newsletters_m extends MY_Model
 {
 	protected $_table = 'newsletters';
-	
+
 	public function __construct()
 	{
 		parent::__construct();
 	}
-	
+
 	public function get_newsletters($params = array())
-	{	
+	{
 		if(isset($params['order'])) $this->db->order_by($params['order']);
-		
+
 		// Limit the results based on 1 number or 2 (2nd is offset)
 		if(isset($params['limit']) && is_int($params['limit'])) $this->db->limit($params['limit']);
-		
+
 		elseif(isset($params['limit']) && is_array($params['limit'])) $this->db->limit($params['limit'][0], $params['limit'][1]);
-		
+
 		return $this->db->get('newsletters')->result();
 	}
-	
+
 	public function get_cron_newsletters()
 	{
 		$where = "sent_on IS NULL";
-		
+
 		return $this->db->where('send_cron', 1)
 					->where($where)
 					->get('newsletters')
 					->result();
 	}
-	
+
 	//get newsletter & parse the body
 	public function get_newsletter($id, $data)
 	{
@@ -52,22 +52,22 @@ class Newsletters_m extends MY_Model
 
 		// parse the body for tags
 		$data->newsletter->body = $this->parser->parse_string(str_replace('&quot;', '"', $data->newsletter->body), $data, TRUE);
-		
+
 		return $data->newsletter;
 	}
-	
+
 	//get newsletter without parsing body (used in Edit)
 	public function get_newsletter_source($id)
 	{
 		return $this->db->get_where('newsletters', array('id' => $id))
 						->row();
 	}
-	
+
 	public function count_newsletters($params = array())
 	{
 		return $this->db->count_all_results('newsletters');
 	}
-	
+
 	public function create_newsletter($input = array())
 	{
 		$this->db->insert('newsletters',
@@ -77,7 +77,7 @@ class Newsletters_m extends MY_Model
 							'read_receipts' => $input['read_receipts'],
 							'created_on' => now()
 						  ));
-		
+
 		//key = target url, value = hash tag
 		$combined_urls = array_combine($input['tracked_urls']['target'], $input['tracked_urls']['hash']);
 
@@ -93,12 +93,12 @@ class Newsletters_m extends MY_Model
 								  ));
 			}
 		}
-		
+
 		return TRUE;
 	}
-	
+
 	public function edit_newsletter($input, $id)
-	{	
+	{
 		$this->db->where('id', $id)
 						->update('newsletters',
 						  array(
@@ -106,7 +106,7 @@ class Newsletters_m extends MY_Model
 							'body' => $input['body'],
 							'read_receipts' => $input['read_receipts']
 						  ));
-						
+
 		//get rid of old urls so there's no duplicates
 		$this->db->delete('newsletter_urls', array('newsletter_id' => $id));
 
@@ -125,27 +125,27 @@ class Newsletters_m extends MY_Model
 								  ));
 			}
 		}
-		
+
 		return TRUE;
 	}
-	
+
 	public function delete_newsletter($id)
-	{	
+	{
 		return $this->db->delete('newsletters', array('id' => $id));
 	}
-	
+
 	public function set_cron($id)
 	{
 		return $this->db->where('id', $id)
 					->update('newsletters', array('send_cron' => 1));
 	}
-	
+
 	public function send_newsletter($id, $batch, $data)
 	{
 		$this->load->library('email');
 
 		$data = new StdClass;
-		
+
 		//get the newsletter directly so we can parse after the email address is available
 		$data->newsletter = $this->db->get_where('newsletters', array('id' => $id))
 							   ->row();
@@ -156,7 +156,7 @@ class Newsletters_m extends MY_Model
 		{
 			return 'Error';
 		}
-		
+
 		//append the tracking image if it's enabled
 		if($data->newsletter->read_receipts === '1')
 		{
@@ -171,7 +171,7 @@ class Newsletters_m extends MY_Model
 							   ->limit(1)
 							   ->get()
 							   ->row();
-		
+
 		//get the offset value from last sent id
 		$offset = $this->db->from('newsletter_emails')
 						   ->where('id <=', $data->newsletter->last_sent)
@@ -185,19 +185,19 @@ class Newsletters_m extends MY_Model
 		$emails = $this->db->where('active', 1)
 			->get('newsletter_emails', $limit, $offset)
 			->result();
-		
+
 		if(!$emails)
 		{
 			return array('message' => lang('newsletters.no_subscribers'), 'status' => 'Finished');
 		}
-		
+
 		foreach ($emails as $data->recipient)
 		{
 			// parse the body for tags
 			$body = html_entity_decode($this->parser->parse_string(str_replace(array('&quot;', '&#39;'), array('"', "'"), $data->newsletter->body), $data, TRUE));
-		
+
 			$this->email->clear();
-		
+
 			$this->email->from($this->settings->get('newsletter_from'));
 			$this->email->reply_to($this->settings->get('newsletter_reply_to'));
 			$this->email->to($data->recipient->email);
@@ -208,7 +208,7 @@ class Newsletters_m extends MY_Model
 			{
 				return 'Error';
 			}
-		
+
 			//We don't want to tick someone off by sending a duplicate if we have to abort & resend
 			$this->db->update('newsletters', array('last_sent' => $data->recipient->id), array('id' => $id));
 		}
@@ -216,7 +216,7 @@ class Newsletters_m extends MY_Model
 		if($data->recipient->id == $last_email->id)
 		{
 			$this->db->update('newsletters', array('sent_on' => now()), array('id' => $id));
-			
+
 			return array('message' => sprintf(lang('newsletters.all_sent'), $this->db->where('active', 1)->count_all_results('newsletter_emails')), 'status' => 'Finished');
 		}
 		else
@@ -224,18 +224,18 @@ class Newsletters_m extends MY_Model
 			return array('message' => sprintf(lang('newsletters.number_sent'), $offset + 1, $this->db->count_all('newsletter_emails')), 'status' => $batch == 'false' ? 'Incomplete' : 'Finished');
 		}
 	}
-	
+
 	public function get_newsletter_urls($id)
 	{
 		return $this->db->get_where('newsletter_urls', array('newsletter_id' => $id))
 						->result();
 	}
-	
+
 	public function click($hash)
 	{
 		$url = $this->db->get_where('newsletter_urls', array('hash' => $hash))
 						->row();
-						
+
 		//increment the click counter
 		$this->db->insert('newsletter_clicks',
 						  array('url_id' => $url->id,
@@ -245,7 +245,7 @@ class Newsletters_m extends MY_Model
 						  ));
 		return $url;
 	}
-	
+
 	public function open($id)
 	{
 		return $this->db->insert('newsletter_opens',
@@ -254,7 +254,7 @@ class Newsletters_m extends MY_Model
 								'time' => now()
 						  ));
 	}
-	
+
 	public function get_statistics($id)
 	{
 		//fetch the links used in this newsletter
@@ -262,36 +262,36 @@ class Newsletters_m extends MY_Model
 						 ->from('newsletter_urls')
 						 ->get()
 						 ->result();
-						 
+
 		foreach($urls as $url)
 		{
 			$stats->{$url->target}->unique_visitors = $this->unique_visitors($url->id);
-			
+
 			$stats->{$url->target}->total_visitors = $this->total_visitors($url->id);
 		}
-		
+
 		//get the data from the image tracking
 		$stats->unique_opens = $this->unique_opens($id);
 		$stats->total_opens = $this->total_opens($id);
 		return $stats;
 	}
-	
+
 	//total visitors to one tracked url
 	public function total_visitors($url_id)
 	{
 		$records = $this->db->query('SELECT `ip` FROM ' . $this->db->dbprefix('newsletter_clicks') . ' WHERE `url_id` = '. $url_id)->result();
-		
+
 		return count($records);
 	}
-	
+
 	//unique visitors to one tracked url
 	public function unique_visitors($url_id)
 	{
 		$records = $this->db->query('SELECT DISTINCT `ip` FROM ' . $this->db->dbprefix('newsletter_clicks') . ' WHERE `url_id` = '. $url_id)->result();
-		
+
 		return count($records);
 	}
-	
+
 	//all img opens + unique link clicks = total newsletter opens
 	public function total_opens($id)
 	{
@@ -309,13 +309,13 @@ class Newsletters_m extends MY_Model
 		}
 		return count($opens);
 	}
-	
+
 	//unique newsletter opens by ip using img tracking plus clicks
 	public function unique_opens($id)
 	{
 		$records = $this->db->query('SELECT DISTINCT `ip` FROM ' . $this->db->dbprefix('newsletter_clicks') . ' WHERE `newsletter_id` = '.$id.' UNION SELECT DISTINCT `ip` FROM ' . $this->db->dbprefix('newsletter_opens') . ' WHERE `newsletter_id` = '.$id)
 						->result();
-		
+
 		return count($records);
 	}
 }
