@@ -12,7 +12,7 @@
 
 class Module_Newsletters extends Module {
 
-	public $version = '1.4.1';
+	public $version = '1.5.0';
 
 	public function info()
 	{
@@ -89,7 +89,7 @@ class Module_Newsletters extends Module {
 			  PRIMARY KEY  (`id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		";
-		
+
 		$newsletter_emails = "
 			CREATE TABLE ".$this->db->dbprefix('newsletter_emails')." (
 			  `id` int(6) unsigned NOT NULL auto_increment,
@@ -100,7 +100,7 @@ class Module_Newsletters extends Module {
 			  PRIMARY KEY  (`id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		";
-		
+
 		$newsletter_opens = "
 			CREATE TABLE ".$this->db->dbprefix('newsletter_opens')." (
 			  `id` int(11) unsigned NOT NULL auto_increment,
@@ -110,7 +110,7 @@ class Module_Newsletters extends Module {
 			  PRIMARY KEY  (`id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		";
-		
+
 		$newsletter_urls = "
 			CREATE TABLE ".$this->db->dbprefix('newsletter_urls')." (
 			  `id` int(6) unsigned NOT NULL auto_increment,
@@ -120,7 +120,7 @@ class Module_Newsletters extends Module {
 			  PRIMARY KEY  (`id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		";
-		
+
 		$newsletter_clicks = "
 			CREATE TABLE ".$this->db->dbprefix('newsletter_clicks')." (
 			  `id` int(11) unsigned NOT NULL auto_increment,
@@ -131,7 +131,7 @@ class Module_Newsletters extends Module {
 			  PRIMARY KEY  (`id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		";
-		
+
 		$newsletter_templates = "
 			CREATE TABLE ".$this->db->dbprefix('newsletter_templates')." (
 			  `id` int(6) unsigned NOT NULL auto_increment,
@@ -140,7 +140,7 @@ class Module_Newsletters extends Module {
 			  PRIMARY KEY  (`id`)
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 		";
-		
+
 		$template_1 = array(
 							'title' => 'Default 1',
 							'body'  => '
@@ -218,7 +218,7 @@ class Module_Newsletters extends Module {
 			</body>
 		</html>
 		');
-		
+
 		$template_2 = array(
 							'title' => 'Default 2',
 							'body'  => '
@@ -301,7 +301,7 @@ class Module_Newsletters extends Module {
 			</body>
 		</html>
 		');
-		
+
 		$template_3 = array(
 							'title' => 'Default 3',
 							'body'  => '
@@ -384,7 +384,7 @@ class Module_Newsletters extends Module {
 			</body>
 		</html>
 		');
-		
+
 		$template_4 = array(
 							'title' => 'Default 4',
 							'body'  => '
@@ -467,7 +467,7 @@ class Module_Newsletters extends Module {
 		('newsletter_email_limit', 'Limit', 'If your host limits the number of outgoing emails per hour/day set it here. Otherwise set it to 0 for automatic send', 'text', '0', '', '', 0, 1, 'newsletters', 973),
 		('newsletter_cron_enabled', 'Cron', 'Send with Cron. If enabled you must have a cron job to send newsletters.', 'select', '0', '0', '0=Disabled|1=Enabled', 0, 1, 'newsletters', 974),
 		('newsletter_cron_key', 'Cron Key', 'Set a key to prevent visitors from triggering a cron send. example.com/newsletters/cron/gy84kn', 'text', 'gy84kn', 'gy84kn', '', 0, 1, 'newsletters', 975);";
-		
+
 		if($this->db->query($newsletters) &&
 		   $this->db->query($newsletter_emails) &&
 		   $this->db->query($newsletter_opens) &&
@@ -480,6 +480,7 @@ class Module_Newsletters extends Module {
 		   $this->db->insert('newsletter_templates', $template_3) &&
 		   $this->db->insert('newsletter_templates', $template_4) )
 		{
+			$this->_mailchimp_settings();
 			return TRUE;
 		}
 	}
@@ -496,6 +497,45 @@ class Module_Newsletters extends Module {
 			'module' => 'newsletters'
 		));
 		return TRUE;
+	}
+
+	private function _mailchimp_settings() {
+		Settings::add(array(
+			'slug' => 'mailchimp_enabled',
+			'title' => 'Mailchimp enabled',
+			'description' => '',
+			'type' => 'select',
+			'default' => '',
+			'value' => '',
+			'is_gui' => true,
+			'options' => '0=Disabled|1=Enabled',
+			'is_required' => 1,
+			'module' => 'newsletters'
+		));
+		Settings::add(array(
+			'slug' => 'mailchimp_api_key',
+			'title' => 'Mailchimp API KEY',
+			'description' => '',
+			'type' => 'text',
+			'default' => '',
+			'value' => '',
+			'is_gui' => true,
+			'options' => '',
+			'is_required' => 0,
+			'module' => 'newsletters'
+		));
+		Settings::add(array(
+			'slug' => 'mailchimp_list_id',
+			'title' => 'Mailchimp List Id',
+			'description' => '',
+			'type' => 'text',
+			'default' => '',
+			'value' => '',
+			'is_gui' => true,
+			'options' => '',
+			'is_required' => 0,
+			'module' => 'newsletters'
+		));
 	}
 
 	public function upgrade($old_version)
@@ -516,7 +556,7 @@ class Module_Newsletters extends Module {
 					'module' => 'newsletters'
 				);
 				$this->db->insert('settings', $newsletter_opt_in);
-				
+
 				$this->dbforge->add_column('newsletter_emails',
 					array('active' => array('type' => 'tinyint',
 											'constraint' => 1,
@@ -525,7 +565,7 @@ class Module_Newsletters extends Module {
 											)
 						  )
 					);
-				
+
 				$opt_in_template = "
 					INSERT INTO " . $this->db->dbprefix('email_templates') . " (`slug`, `name`, `description`, `subject`, `body`, `lang`, `is_default`) VALUES ('newsletters_opt_in', 'Newsletters Opt In', 'Template for the email that\'s sent when a user subscribes.', '{{ settings:site_name }} :: Newsletter Activation',
 					'<h3>You have recently subscribed to the newsletter at {{ settings:site_name }}</h3>
@@ -535,16 +575,16 @@ class Module_Newsletters extends Module {
 					', 'en', '1');
 				";
 				$this->db->query($opt_in_template);
-				
+
 				// fix the formatting bug
 				$this->db->where('slug', 'newsletters')->update('modules', array('skip_xss' => 1));
-			
+
 			break;
-		
+
 			case '1.2.1':
 				$this->load->model('newsletters/templates_m');
 				$templates = $this->templates_m->get_all();
-				
+
 				foreach ($templates AS &$template)
 				{
 					$find = array('{pyro:newsletter_activation}',
@@ -554,7 +594,7 @@ class Module_Newsletters extends Module {
 								  '{pyro:recipient:hash}',
 								  '{pyro:url:site}',
 								  );
-					
+
 					$replace = array('{{ newsletter_activation }}',
 									 '{{ newsletter:id }}',
 									 '{{ settings:site_name }}',
@@ -562,12 +602,15 @@ class Module_Newsletters extends Module {
 									 '{{ recipient:hash }}',
 									 '{{ url:site }}',
 									 );
-					
+
 					$template->body = str_replace($find, $replace, $template->body);
 
 					$this->templates_m->update($template->id, $template);
 				}
-				
+
+			break;
+			case '1.4.2':
+				$this->_mailchimp_settings();
 			break;
 		}
 		return TRUE;

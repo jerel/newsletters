@@ -15,20 +15,22 @@ class Newsletters extends Public_Controller
 	public function __construct()
 	{
 		parent::__construct();
-		
+
 		$this->load->model('newsletters_m');
 		$this->load->model('subscribers_m');
 		$this->lang->load('newsletter');
+
 	}
-	
+
 	//show a list of all newsletters
 	public function index()
 	{
+		$data = new stdClass();
 		$data->newsletters = $this->newsletters_m->get_newsletters(array('order'=>'created_on DESC'));
 
 		$this->template->build('index', $data);
 	}
-	
+
 	//Display newsletter for users that wish to read on the website
 	public function archive($id = '')
 	{
@@ -43,15 +45,15 @@ class Newsletters extends Public_Controller
 			redirect('404');
 		}
 	}
-	
+
 	public function subscribe()
 	{
 		$this->load->library('form_validation');
 
 		$data = new StdClass;
-		
+
 		$this->form_validation->set_rules('email', lang('newsletters.email_label'), 'trim|required|valid_email|callback__check_email');
-		
+
 		if( $this->form_validation->run() )
 		{
 			if( $this->subscribers_m->subscribe($this->input->post()) )
@@ -69,7 +71,7 @@ class Newsletters extends Public_Controller
 
 		$this->template->build('subscribe_form', $data);
 	}
-	
+
 	public function activate($hash = '')
 	{
 		if ($this->subscribers_m->activate($hash))
@@ -83,13 +85,13 @@ class Newsletters extends Public_Controller
 		redirect();
 	}
 
-	public function unsubscribe($hash = '') 
+	public function unsubscribe($hash = '')
 	{
 		if($hash === '')
 		{
 			redirect('');
 		}
-		
+
 		if ($this->subscribers_m->unsubscribe($hash))
 		{
 			$this->session->set_flashdata(array('success'=> lang('newsletters.delete_mail_success')));
@@ -101,12 +103,12 @@ class Newsletters extends Public_Controller
 			redirect('');
 		}
 	}
-	
+
 	//Record a click, then redirect to target url
 	function short($hash = '')
 	{
 		$url = $this->newsletters_m->click($hash);
-		
+
 		if($url)
 		{
 			redirect($url->target);
@@ -116,15 +118,15 @@ class Newsletters extends Public_Controller
 			redirect('404');
 		}
 	}
-	
+
 	//Record newsletter open when image is requested
 	function img($id = '')
 	{
 		$this->newsletters_m->open($id);
-		
+
 		echo Asset::img('spacer.gif', 'alt="spacer image"');
 	}
-	
+
 	//Fetch a file from the /uploads folder and output it
 	//so newsletters can have images with an absolute path
 	function files($filename)
@@ -138,7 +140,7 @@ class Newsletters extends Public_Controller
 			echo file_get_contents(BASE_URL . '/uploads/files/' . $filename);
 		}
 	}
-	
+
 	//make sure they didn't submit the default or a duplicate
 	function _check_email($email)
 	{

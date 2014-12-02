@@ -13,37 +13,63 @@
 class Subscribers_m extends MY_Model
 {
 	protected $_table = 'newsletter_emails';
-	
+
 	public function __construct()
 	{
 		parent::__construct();
+
+		if ($this->settings->mailchimp_enabled == '1') {
+			putenv('MAILCHIMP_APIKEY='.$this->settings->mailchimp_api_key);
+			$this->load->library('mailchimp');
+		}
 	}
-	
+
+	private function _subscribe_user($hash, $email, $active = 0) {
+		if ($this->settings->mailchimp_enabled == '1') {
+			try {
+				$this->mailchimp->lists->subscribe($this->settings->mailchimp_list_id, array('email'=>$email));
+				$this->db->insert('newsletter_emails', array('email' => $email,
+					'hash' => $hash,
+					'active' => $active,
+					'registered_on'=>now()
+				));
+				return TRUE;
+			} catch (Mailchimp_Error $e) {
+				if ($e->getMessage()) {
+					error_log('MAILCHIMP error: '.$e->getMessage());
+				} else {
+					error_log('MAILCHIMP unknown error occurred.');
+				}
+				return FALSE;
+			}
+		} else {
+			$this->db->insert('newsletter_emails', array('email' => $email,
+				'hash' => $hash,
+				'active' => $active,
+				'registered_on'=>now()
+			));
+			return TRUE;
+		}
+	}
+
 	public function subscribe($input = array(), $admin = 0)
 	{
 		$email = $input['email'];
 		$hash = $this->rand_string(10);
-			
+
 		if (!$this->check_email($email))
 		{
 			// if subscribed via admin panel we won't send activation email regardless of setting
 			if ($this->settings->newsletter_opt_in == '0' OR $admin = 1)
 			{
-				$this->db->insert('newsletter_emails', array('email' => $email,
-															 'hash' => $hash,
-															 'active' => 1,
-															 'registered_on'=>now()
-															 ));
-				return TRUE;
+				return $this->_subscribe_user($hash, $email, 1);
 			}
 			else
 			{
-				$this->db->insert('newsletter_emails', array('email' => $email,
-															 'hash' => $hash,
-															 'active' => 0,
-															 'registered_on'=>now()
-															 ));
-					
+				if (!$this->_subscribe_user($hash, $email)) {
+					return FALSE;
+				}
+
 				$data['slug'] 					= 'newsletters_opt_in';
 				$data['newsletter_activation']	= site_url('newsletters/activate/'.$hash);
 				$data['to']						= $email;
@@ -57,12 +83,12 @@ class Subscribers_m extends MY_Model
 				 * and let the templates module take care of the rest
 				 */
 				$this->load->model('templates/email_templates_m');
-			
+
 				$lang = Settings::get('site_lang');
-			
+
 				//get all email templates
 				$templates = $this->email_templates_m->get_templates($data['slug']);
-					
+
 				//make sure we have something to work with
 				if ( ! empty($templates))
 				{
@@ -70,19 +96,19 @@ class Subscribers_m extends MY_Model
 					$from	  = isset($data['from']) ? $data['from'] : Settings::get('server_email');
 					$reply_to = isset($data['reply-to']) ? $data['reply-to'] : $from;
 					$to		  = isset($data['to']) ? $data['to'] : Settings::get('contact_email');
-			
+
 					$subject = array_key_exists($lang, $templates) ? $templates[$lang]->subject : $templates['en']->subject ;
 					$subject = $this->parser->parse_string($subject, $data, TRUE);
-			
+
 					$body = array_key_exists($lang, $templates) ? $templates[$lang]->body : $templates['en']->body ;
 					$body = $this->parser->parse_string($body, $data, TRUE);
-			
+
 					$this->email->from($from, $data['name']);
 					$this->email->reply_to($reply_to);
 					$this->email->to($to);
 					$this->email->subject($subject);
 					$this->email->message($body);
-			
+
 					if ($this->email->send() == TRUE)
 					{
 						return TRUE;
@@ -101,16 +127,39 @@ class Subscribers_m extends MY_Model
 		}
 		return FALSE;
 	}
-	
+
 	public function unsubscribe($hash)
 	{
-		return $this->db->delete('newsletter_emails', array('hash' => $hash));
+		if ($this->settings->mailchimp_enabled == '1') {
+			try {
+				$qry = $this->db->get_where('newsletter_emails', array('hash' => $hash), 1);
+				if ($qry) {
+					$row = $qry->row();
+					var_dump_log($row);
+					$this->mailchimp->lists->unsubscribe($this->settings->mailchimp_list_id, array('email'=>$row->email));
+					$this->db->delete('newsletter_emails', array('hash' => $hash));
+					return TRUE;
+				} else {
+					return FALSE;
+				}
+			} catch (Mailchimp_Error $e) {
+				if ($e->getMessage()) {
+					error_log('MAILCHIMP error: '.$e->getMessage());
+				} else {
+					error_log('MAILCHIMP unknown error occurred.');
+				}
+				return FALSE;
+			}
+		} else {
+			$this->db->delete('newsletter_emails', array('hash' => $hash));
+		}
+		return ;
 	}
-	
+
 	public function activate($hash)
 	{
 		$this->db->where('hash', $hash)->update('newsletter_emails', array('active' => 1));
-		
+
 		if ($this->db->affected_rows() > 0)
 		{
 			return TRUE;
@@ -120,12 +169,12 @@ class Subscribers_m extends MY_Model
 			return FALSE;
 		}
 	}
-	
+
 	public function admin_unsubscribe($email)
 	{
 		return $this->db->delete('newsletter_emails', array('email' => $email));
 	}
-	
+
 	public function count_subscribers()
 	{
 		// whenever we count the subscribers we'll also delete the ones that
@@ -133,11 +182,11 @@ class Subscribers_m extends MY_Model
 		$this->db->where('active', 0)
 			->where('registered_on <', (now() - 1204000))
 			->delete('newsletter_emails');
-			
+
 		return $this->db->where('active', 1)
 			->count_all_results('newsletter_emails');
 	}
-	
+
 	public function rand_string($length = 10)
 	{
 		$chars = 'ABCDEFGHKLMNOPQRSTWXYZabcdefghjkmnpqrstwxyz';
@@ -150,7 +199,7 @@ class Subscribers_m extends MY_Model
 		}
 		return $string;
 	}
-	
+
 	public function check_email($email)
 	{
 		$query = $this->db->get_where('newsletter_emails', array('email' => $email));
